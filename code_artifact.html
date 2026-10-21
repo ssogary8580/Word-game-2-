@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>말랑말랑 낱말 분류기</title>
+    <style>
+        /* [1. 파스텔톤 색상 및 기본 설정] */
+        :root {
+            --primary: #FFB7B2;     /* 파스텔 핑크 */
+            --secondary: #B5EAD7;   /* 파스텔 민트 */
+            --accent: #8CA6DB;      /* 파스텔 블루 */
+            --noun-bg: #FFE4E1;     
+            --verb-bg: #E0F7FA;
+            --adj-bg: #FFF9C4;
+            --background: #F4F7F6;
+            --text-main: #4A4A4A;
+            --error: #FF6B6B;
+            --success: #4CAF50;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* [2. 메인 컨테이너 및 화면 전환] */
+        #app-container {
+            background-color: #FFFFFF;
+            width: 95%;
+            max-width: 800px;
+            min-height: 500px;
+            padding: 2.5rem;
+            border-radius: 24px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+            position: relative;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            width: 100%;
+            animation: fadeIn 0.4s ease;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* [3. 공통 UI 요소] */
+        h1 { color: var(--primary); margin: 0; font-size: 2rem; text-align: center; word-break: keep-all; }
+        h2 { color: var(--accent); margin: 0; font-size: 1.5rem; }
+        p { color: var(--text-main); line-height: 1.6; text-align: center; word-break: keep-all; }
+
+        input[type="text"] {
+            width: 100%;
+            max-width: 300px;
+            padding: 15px;
+            font-size: 1.2rem;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            outline: none;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus { border-color: var(--primary); }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s, filter 0.2s;
+        }
+        button:hover { transform: translateY(-3px); filter: brightness(0.95); }
+        button.secondary { background-color: var(--secondary); color: #2c5946; }
+        button.accent { background-color: var(--accent); }
+
+        /* [4. 낱말 입력 화면 전용] */
+        .input-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .word-chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            width: 100%;
+            min-height: 100px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 12px;
+            justify-content: center;
+        }
+        .word-chip {
+            background: var(--accent);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            animation: pop 0.3s ease;
+        }
+
+        /* [5. 플레이 화면 전용 (분류하기)] */
+        .play-header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+        
+        .board-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            width: 100%;
+        }
+        @media (max-width: 600px) {
+            .board-container { grid-template-columns: 1fr; }
+        }
+
+        .category-box {
+            border-radius: 16px;
+            padding: 15px;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            border: 3px dashed #ccc;
+        }
+        .cat-noun { background-color: var(--noun-bg); border-color: #ffb6b9; }
+        .cat-verb { background-color: var(--verb-bg); border-color: #81ecec; }
+        .cat-adj { background-color: var(--adj-bg); border-color: #ffeaa7; }
+
+        .category-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #333;
+            background: rgba(255,255,255,0.7);
+            padding: 5px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+
+        .deck-area {
+            width: 100%;
+            padding: 20px;
+            background: #f0f0f0;
+            border-radius: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            min-height: 100px;
+        }
+
+        .word-card {
+            background: white;
+            border: 2px solid #ddd;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text-main);
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s, border-color 0.2s;
+            user-select: none;
+        }
+        .word-card:hover { transform: scale(1.05); border-color: var(--primary); }
+        .word-card.selected { border-color: var(--primary); background-color: var(--primary); color: white; transform: scale(1.1); }
+
+        /* [6. 모달 & 힌트 UI] */
+        #hint-toast {
+            position: fixed;
+            top: 20px;
+            background: var(--error);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transform: translateY(-100px);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+        }
+        #hint-toast.show { transform: translateY(0); }
+
+        /* [7. 보고서 화면 전용] */
+        #report-canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            display: none;
+        }
+        #report-image {
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        /* [8. 애니메이션] */
+        @keyframes pop {
+            0% { transform: scale(0.8); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .anim-pop { animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .anim-shake { animation: shake 0.4s ease-in-out; border-color: var(--error) !important; background-color: #fff !important; color: var(--error) !important; }
+        
+        .confetti { position: absolute; width: 10px; height: 10px; opacity: 0; animation: fall 3s linear forwards; }
+        @keyframes fall {
+            0% { opacity: 1; transform: translateY(-20px) rotate(0deg); }
+            100% { opacity: 0; transform: translateY(100vh) rotate(720deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hint-toast">힌트 메시지</div>
+
+    <div id="app-container">
+        
+        <!-- [화면 1: 이름 입력] -->
+        <div id="screen-name" class="screen active">
+            <h1>🎒 말랑말랑 낱말 분류기</h1>
+            <p>낱말의 종류를 구분하는 탐험을 떠나볼까요?<br>먼저 나의 이름을 적어주세요.</p>
+            <input type="text" id="input-name" placeholder="이름을 입력하세요" autocomplete="off" onkeypress="if(event.key==='Enter') goToWordInput()">
+            <button onclick="goToWordInput()">다음으로 가기</button>
+        </div>
+
+        <!-- [화면 2: 낱말 입력] -->
+        <div id="screen-input" class="screen">
+            <h2>📝 분류할 낱말 모으기</h2>
+            <p>분류하고 싶은 낱말을 직접 입력해서 모아보세요!<br>책에서 본 모양 (예: 퉁명스럽게, 일깨워) 그대로 써도 좋아요.</p>
+            
+            <div class="input-group">
+                <input type="text" id="input-word" placeholder="낱말 입력 (예: 학교, 일깨워)" autocomplete="off" onkeypress="if(event.key==='Enter') addWord()">
+                <button class="secondary" onclick="addWord()">추가</button>
+            </div>
+            <button class="accent" style="padding: 10px 20px; font-size: 1rem;" onclick="addRandomWords()">🎲 선생님 추천 낱말 5개 뽑기</button>
+
+            <div class="word-chip-container" id="word-chip-list"></div>
+            
+            <button onclick="goToPlay()">입력 완료! 분류 시작</button>
+        </div>
+
+        <!-- [화면 3: 낱말 분류 활동 (플레이)] -->
+        <div id="screen-play" class="screen">
+            <div class="play-header">
+                <h2 id="play-title">탐험가 님의 분류판</h2>
+                <div style="font-weight: bold; color: var(--text-main);">남은 낱말: <span id="remain-count">0</span>개</div>
+            </div>
+
+            <p style="font-size: 0.9rem; margin-top: -10px;">낱말 카드를 누른 뒤, 알맞은 방을 선택하세요!</p>
+
+            <div class="deck-area" id="unclassified-deck"></div>
+
+            <div class="board-container">
+                <div class="category-box cat-noun" onclick="attemptClassify('noun')">
+                    <div class="category-title">🍎 이름을 나타내는 낱말</div>
+                    <div id="box-noun" style="display:flex; flex-wrap:wrap; gap:5px; justify-content:center; width:100%;"></div>
+                </div>
+                <div class="category-box cat-verb" onclick="attemptClassify('verb')">
+                    <div class="category-title">🏃 움직임을 나타내는 낱말</div>
+                    <div id="box-verb" style="display:flex; flex-wrap:wrap; gap:5px; justify-content:center; width:100%;"></div>
+                </div>
+                <div class="category-box cat-adj" onclick="attemptClassify('adj')">
+                    <div class="category-title">✨ 성질이나 상태를 나타내는 낱말</div>
+                    <div id="box-adj" style="display:flex; flex-wrap:wrap; gap:5px; justify-content:center; width:100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- [화면 4: 성공 화면] -->
+        <div id="screen-success" class="screen">
+            <h1 style="font-size: 3rem;">🎉 분류 성공!</h1>
+            <p>모든 낱말을 정확하게 분류했어요!<br>내가 만든 멋진 보고서를 확인해볼까요?</p>
+            <button onclick="goToReport()">보고서 확인하기</button>
+        </div>
+
+        <!-- [화면 5: 보고서 및 다운로드] -->
+        <div id="screen-report" class="screen">
+            <h2>📊 나의 낱말 분류 보고서</h2>
+            <img id="report-image" alt="보고서 이미지">
+            <canvas id="report-canvas"></canvas> 
+            
+            <div style="display: flex; gap: 15px; margin-top: 10px;">
+                <button onclick="downloadReport()">📥 사진으로 다운로드</button>
+                <button class="secondary" onclick="location.reload()">처음부터 다시하기</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* =========================================
+           [데이터: 기본 사전 데이터] 
+           ========================================= */
+        const wordDictionary = {
+            "학교": "noun", "가방": "noun", "책상": "noun", "하늘": "noun", "강아지": "noun", 
+            "먹다": "verb", "가다": "verb", "달리다": "verb", "만들다": "verb", "그리다": "verb",
+            "예쁘다": "adj", "크다": "adj", "많다": "adj", "빠르다": "adj", "아름답다": "adj"
+        };
+
+        /* =========================================
+           [핵심 업그레이드: 이중 교차 스마트 형태소 분석기] 
+           ========================================= */
+        function guessWordCategory(word) {
+            // 1단계: 자주 틀리거나 명확한 '어간(뿌리)'을 우선 탐색 (강력한 필터링)
+            const adjStems = /^(예쁘|크|작|많|적|높|낮|빠르|느리|좋|싫|길|짧|덥|춥|맑|흐리|달|맵|짜|아프|기쁘|슬프|따뜻|시원|아름답|귀엽|무섭|착하|고리타분|퉁명|새롭|부지런)/;
+            if (adjStems.test(word)) return 'adj';
+
+            const verbStems = /^(먹|가|오|달리|뛰|자|입|신|보|듣|쓰|읽|걷|놀|웃|울|만들|주|받|그리|타|날|부르|춤추|일깨|배우|가르치|싸우|이기|돕|도와|해|뛰어)/;
+            if (verbStems.test(word)) return 'verb';
+
+            // 2단계: '성질/상태(형용사)'를 나타내는 특유의 '어미/접미사' 패턴 탐색
+            const adjEndings = /(하게|스럽게|답게|롭게|히|한|운|은|스러운|로운|다운|스럽다|롭다|답다|가운|갑게|갑다)$/;
+            if (adjEndings.test(word)) return 'adj';
+            
+            // 3단계: '움직임(동사)'을 나타내는 다양한 활용형 '어미' 패턴 탐색
+            const verbEndings = /(고|며|서|아서|어서|워|여|아|어|니|으니까|자|면|지|았다|었다|했다|려고|면서|러|는|는다|기|요|줘)$/;
+            if (verbEndings.test(word)) return 'verb';
+
+            // 4단계: 위 조건에 안 걸렸지만 '다'로 끝난다면 기본적으로 움직임(동사)으로 간주
+            if (word.endsWith('다')) return 'verb';
+
+            // 5단계: 그 외의 모든 낱말 (조사가 붙은 명사 등 포함)은 '이름(명사)'으로 분류
+            return 'noun';
+        }
+
+        /* =========================================
+           [상태 변수] 
+           ========================================= */
+        let studentName = "";
+        let selectedWords = [];
+        let currentlySelectedCard = null; 
+        let categorizedData = { noun: [], verb: [], adj: [] }; 
+
+        /* =========================================
+           [화면 전환 및 낱말 입력 로직] 
+           ========================================= */
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function goToWordInput() {
+            const nameInput = document.getElementById('input-name').value.trim();
+            if(!nameInput) { showHint("이름을 꼭 입력해주세요!"); return; }
+            studentName = nameInput;
+            showScreen('screen-input');
+        }
+
+        function goToPlay() {
+            if(selectedWords.length === 0) { showHint("분류할 낱말을 하나 이상 입력해주세요!"); return; }
+            document.getElementById('play-title').innerText = `${studentName} 탐험가의 분류판`;
+            renderDeck();
+            showScreen('screen-play');
+        }
+
+        function goToSuccess() {
+            createConfetti();
+            setTimeout(() => { showScreen('screen-success'); }, 500);
+        }
+
+        function goToReport() {
+            generateCanvasReport();
+            showScreen('screen-report');
+        }
+
+        function addWord() {
+            const inputEl = document.getElementById('input-word');
+            const word = inputEl.value.trim();
+            
+            if(!word) return;
+            if(selectedWords.includes(word)) {
+                showHint("이미 추가된 낱말이에요.");
+                inputEl.value = ''; return;
+            }
+
+            if(!wordDictionary[word]) {
+                wordDictionary[word] = guessWordCategory(word);
+            }
+
+            selectedWords.push(word);
+            renderWordChips();
+            inputEl.value = '';
+            inputEl.focus();
+        }
+
+        function addRandomWords() {
+            const allWords = Object.keys(wordDictionary);
+            let addedCount = 0;
+            while(addedCount < 5) {
+                const randomWord = allWords[Math.floor(Math.random() * allWords.length)];
+                if(!selectedWords.includes(randomWord)) {
+                    selectedWords.push(randomWord);
+                    addedCount++;
+                }
+            }
+            renderWordChips();
+        }
+
+        function renderWordChips() {
+            const container = document.getElementById('word-chip-list');
+            container.innerHTML = '';
+            selectedWords.forEach(word => {
+                const chip = document.createElement('div');
+                chip.className = 'word-chip';
+                chip.innerText = word;
+                container.appendChild(chip);
+            });
+        }
+
+        /* =========================================
+           [분류 플레이 로직] 
+           ========================================= */
+        function renderDeck() {
+            const deck = document.getElementById('unclassified-deck');
+            deck.innerHTML = '';
+            categorizedData = { noun: [], verb: [], adj: [] };
+            document.getElementById('box-noun').innerHTML = '';
+            document.getElementById('box-verb').innerHTML = '';
+            document.getElementById('box-adj').innerHTML = '';
+            currentlySelectedCard = null;
+
+            selectedWords.forEach(word => {
+                const card = document.createElement('div');
+                card.className = 'word-card';
+                card.innerText = word;
+                card.onclick = () => selectCard(card, word);
+                deck.appendChild(card);
+            });
+            updateRemainCount();
+        }
+
+        function selectCard(cardElement, word) {
+            if(currentlySelectedCard) { currentlySelectedCard.classList.remove('selected'); }
+            if(currentlySelectedCard === cardElement) { currentlySelectedCard = null; return; }
+            currentlySelectedCard = cardElement;
+            currentlySelectedCard.dataset.word = word;
+            cardElement.classList.add('selected');
+        }
+
+        function attemptClassify(targetCategory) {
+            if(!currentlySelectedCard) { showHint("먼저 분류할 낱말 카드를 선택하세요!"); return; }
+
+            const word = currentlySelectedCard.dataset.word;
+            const correctCategory = wordDictionary[word];
+
+            if(correctCategory === targetCategory) {
+                moveCardToBox(currentlySelectedCard, targetCategory);
+                categorizedData[targetCategory].push(word);
+                currentlySelectedCard = null;
+                updateRemainCount();
+            } else {
+                triggerShake(currentlySelectedCard);
+                provideHint(correctCategory, word);
+                currentlySelectedCard.classList.remove('selected');
+                currentlySelectedCard = null;
+            }
+        }
+
+        function moveCardToBox(cardElement, category) {
+            const targetBox = document.getElementById(`box-${category}`);
+            cardElement.classList.remove('selected');
+            cardElement.onclick = null; 
+            cardElement.style.fontSize = '1rem';
+            cardElement.style.padding = '5px 10px';
+            targetBox.appendChild(cardElement);
+            cardElement.classList.add('anim-pop');
+        }
+
+        function updateRemainCount() {
+            const deck = document.getElementById('unclassified-deck');
+            const remain = deck.children.length;
+            document.getElementById('remain-count').innerText = remain;
+            if(remain === 0) { goToSuccess(); }
+        }
+
+        function provideHint(correctCategory, word) {
+            let msg = "";
+            if (/(하게|스럽게|답게|롭게|히|한|운|은)$/.test(word) || /^(고리타분|퉁명|새롭)/.test(word)) {
+                msg = `💡 힌트: '${word}'은(는) 모양이 바뀌었지만 원래 어떤 '성질이나 상태'를 나타내는 말이에요!`;
+            } else if (/(고|며|서|워|아|어|니|자|면|지|았다|었다|했다)$/.test(word) || /^(일깨|가르치|배우)/.test(word)) {
+                msg = `💡 힌트: '${word}'은(는) 모양이 바뀌었지만 몸이나 사물이 '움직이는' 모습을 나타내는 말이에요!`;
+            } else {
+                if(correctCategory === 'noun') msg = "💡 힌트: 사람이나 사물의 '이름'을 나타내는 말이에요.";
+                if(correctCategory === 'verb') msg = "💡 힌트: 몸이나 사물이 '움직이는' 모습을 나타내는 말이에요.";
+                if(correctCategory === 'adj') msg = "💡 힌트: 성질이나 상태를 꾸며주는 말이에요. (예: 예쁘다, 높다)";
+            }
+            showHint(msg);
+        }
+
+        function triggerShake(element) {
+            element.classList.remove('anim-shake');
+            void element.offsetWidth;
+            element.classList.add('anim-shake');
+        }
+
+        let toastTimeout;
+        function showHint(message) {
+            const toast = document.getElementById('hint-toast');
+            toast.innerText = message;
+            toast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, 3500);
+        }
+
+        /* =========================================
+           [보고서 캔버스 생성 및 이미지 다운로드] 
+           ========================================= */
+        function generateCanvasReport() {
+            const canvas = document.getElementById('report-canvas');
+            const ctx = canvas.getContext('2d');
+            const width = 800;
+            const height = 900;
+            canvas.width = width;
+            canvas.height = height;
+
+            ctx.fillStyle = "#F4F7F6";
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.fillStyle = "#FFB7B2";
+            ctx.font = "bold 45px 'Malgun Gothic', sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(`📊 ${studentName}의 낱말 분류 보고서`, width / 2, 80);
+            
+            const colWidth = 240;
+            const startY = 150;
+            const columns = [
+                { title: "이름을 나타내는 낱말", bg: "#FFE4E1", x: 30, data: categorizedData.noun },
+                { title: "움직임을 나타내는 낱말", bg: "#E0F7FA", x: 280, data: categorizedData.verb },
+                { title: "성질/상태를 나타내는 낱말", bg: "#FFF9C4", x: 530, data: categorizedData.adj }
+            ];
+
+            columns.forEach(col => {
+                ctx.fillStyle = col.bg;
+                ctx.beginPath();
+                ctx.roundRect(col.x, startY, colWidth, 700, 15); 
+                ctx.fill();
+                ctx.strokeStyle = "#ddd";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = "#333";
+                ctx.font = "bold 20px 'Malgun Gothic', sans-serif";
+                ctx.fillText(col.title, col.x + colWidth/2, startY + 40);
+
+                ctx.beginPath();
+                ctx.moveTo(col.x + 20, startY + 60);
+                ctx.lineTo(col.x + colWidth - 20, startY + 60);
+                ctx.strokeStyle = "#ccc";
+                ctx.stroke();
+
+                ctx.fillStyle = "#4A4A4A";
+                ctx.font = "bold 22px 'Malgun Gothic', sans-serif";
+                let textY = startY + 110;
+                col.data.forEach(word => {
+                    ctx.fillText(word, col.x + colWidth/2, textY);
+                    textY += 45;
+                });
+            });
+
+            document.getElementById('report-image').src = canvas.toDataURL("image/png");
+        }
+
+        function downloadReport() {
+            const canvas = document.getElementById('report-canvas');
+            const link = document.createElement('a');
+            link.download = `${studentName}_낱말분류보고서.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+        }
+
+        /* =========================================
+           [성공 화면 꽃가루 애니메이션] 
+           ========================================= */
+        function createConfetti() {
+            const colors = ['#FFB7B2', '#B5EAD7', '#8CA6DB', '#FFF9C4', '#FF6B6B'];
+            for (let i = 0; i < 50; i++) {
+                const conf = document.createElement('div');
+                conf.classList.add('confetti');
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                conf.style.animationDelay = (Math.random() * 0.5) + 's';
+                document.body.appendChild(conf);
+                setTimeout(() => conf.remove(), 4000);
+            }
+        }
+    </script>
+</body>
+</html>
